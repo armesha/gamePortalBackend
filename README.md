@@ -44,7 +44,7 @@ Backend REST API for a gaming platform with real-time chat functionality, user a
 - GET `/api/games.php` - List games
 - GET `/api/game.php` - Get game details
 - POST `/api/like_game.php` - Like a game
-- POST `/api/unlike_game.php` - Unlike a game
+- DELETE `/api/unlike_game.php` - Unlike a game
 
 ### User Management
 - GET `/api/user.php` - User profile
