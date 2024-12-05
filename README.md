@@ -14,7 +14,7 @@ Backend REST API for a gaming platform with real-time chat functionality, user a
 
 ## Tech Stack
 
-- PHP 7.4+
+- PHP 8.1+
 - MySQL
 - WebSocket (Ratchet)
 - JWT Authentication
