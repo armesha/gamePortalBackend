@@ -11,7 +11,6 @@ if ($_SERVER['REQUEST_METHOD'] !== 'DELETE') {
 
 requireLogin();
 
-// Get input data
 $input = json_decode(file_get_contents('php://input'), true);
 
 if (empty($input['game_id']) || !is_numeric($input['game_id'])) {
@@ -21,14 +20,12 @@ if (empty($input['game_id']) || !is_numeric($input['game_id'])) {
 $gameId = (int)$input['game_id'];
 $userId = $_SESSION['user_id'];
 
-// Check if favorite exists
 $stmt = $pdo->prepare("SELECT * FROM favorite_games WHERE user_id = :user_id AND game_id = :game_id");
 $stmt->execute(['user_id' => $userId, 'game_id' => $gameId]);
 if (!$stmt->fetch()) {
     sendResponse(['error' => 'Game not in favorites'], 404);
 }
 
-// Remove from favorites
 $stmt = $pdo->prepare("DELETE FROM favorite_games WHERE user_id = :user_id AND game_id = :game_id");
 try {
     $stmt->execute(['user_id' => $userId, 'game_id' => $gameId]);

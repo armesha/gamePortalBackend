@@ -14,28 +14,16 @@ if (empty($input['content'])) {
 }
 
 $content = trim($input['content']);
-$receiver_id = isset($input['receiver_id']) ? intval($input['receiver_id']) : null;
 
 // Sanitize content
 $content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
 
-// Insert message into database
-if ($receiver_id) {
-    // Sending a private message
-    $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, content, created_at) VALUES (:sender_id, :receiver_id, :content, NOW())");
-    $stmt->execute([
-        'sender_id' => $_SESSION['user_id'],
-        'receiver_id' => $receiver_id,
-        'content' => $content,
-    ]);
-} else {
-    // Sending a public message
-    $stmt = $pdo->prepare("INSERT INTO messages (sender_id, content, created_at) VALUES (:sender_id, :content, NOW())");
-    $stmt->execute([
-        'sender_id' => $_SESSION['user_id'],
-        'content' => $content,
-    ]);
-}
+// Insert public message into database
+$stmt = $pdo->prepare("INSERT INTO messages (sender_id, content, created_at) VALUES (:sender_id, :content, NOW())");
+$stmt->execute([
+    'sender_id' => $_SESSION['user_id'],
+    'content' => $content,
+]);
 
 sendResponse(['message' => 'Message sent successfully'], 200);
 ?>
