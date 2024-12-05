@@ -1,5 +1,4 @@
 <?php
-// api/logout.php
 
 require_once '../helpers/response.php';
 require_once '../helpers/auth.php';

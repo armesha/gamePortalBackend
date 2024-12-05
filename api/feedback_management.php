@@ -1,5 +1,4 @@
 <?php
-// File: api/feedback_management.php
 
 require_once '../config/config.php';
 require_once '../helpers/response.php';

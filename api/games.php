@@ -1,5 +1,4 @@
 <?php
-// File: api/games.php
 
 ini_set('display_errors', 1);
 ini_set('display_startup_errors', 1);
@@ -21,7 +20,6 @@ $offset = isset($_GET['offset']) && is_numeric($_GET['offset']) ? (int)$offset =
 $favorite = isset($_GET['favorite']) ? filter_var($_GET['favorite'], FILTER_VALIDATE_BOOLEAN) : false;
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 
-// Enforce maximum limit of 100 games
 $maxLimit = 100;
 if ($count > $maxLimit) {
     $count = $maxLimit;

@@ -1,5 +1,4 @@
 <?php
-// api/get_messages.php
 
 require_once '../config/config.php';
 require_once '../helpers/response.php';

@@ -1,5 +1,4 @@
 <?php
-// api/register.php
 
 require_once '../config/config.php';
 require_once '../helpers/response.php';
