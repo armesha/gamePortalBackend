@@ -1,0 +1,66 @@
+# PHP files
+*.log
+*.sql
+*.sqlite
+.php-version
+phpinfo.php
+test_db_connection.php
+
+# Composer
+/vendor/
+composer.phar
+composer.lock
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment files
+.env
+.env.backup
+.env.local
+.env.*.local
+
+# Project specific directories
+/logs/
+/sessions/
+/uploads/
+/config/
+/src/
+/helpers/
+
+# Cache and logs
+/cache/
+*.cache
+error_log
+access_log
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.swp
+
+# Dependencies
+/node_modules/
+/bower_components/
+
+# Build files
+/dist/
+/build/
+
+# WebSocket
+websocket_server.php

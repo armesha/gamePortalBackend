@@ -1,0 +1,12 @@
+{
+    "autoload": {
+        "psr-4": {
+            "App\\": "src/"
+        }
+    },
+    "require": {
+        "monolog/monolog": "^3.7",
+        "cboden/ratchet": "^0.4.4",
+        "firebase/php-jwt": "^6.10"
+    }
+}
