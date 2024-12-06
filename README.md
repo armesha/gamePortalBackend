@@ -183,4 +183,3 @@
 
 - The `websocket_server.php` runs a WebSocket on `ws://localhost:8080/ws`.
 - After authenticating via PHP session (retrieved from cookies), users can send and receive real-time messages.
-- Private messages can be directed to a specific user if both are connected.
