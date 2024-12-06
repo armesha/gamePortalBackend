@@ -169,54 +169,32 @@ class Chat implements MessageComponentInterface {
 
     protected function handleSendMessage($from, $data) {
         $content = trim($data['content']);
-        $toUserId = isset($data['to']) ? (int)$data['to'] : null;
         try {
             $pdo = $this->getPdo();
             $stmt = $pdo->prepare("SELECT avatar_filename FROM users WHERE user_id = :user_id");
             $stmt->execute(['user_id' => $from->userId]);
             $user = $stmt->fetch(PDO::FETCH_ASSOC);
             $avatarUrl = $user['avatar_filename'] ? '/uploads/avatars/' . $user['avatar_filename'] : null;
-            if ($toUserId) {
-                $stmt = $pdo->prepare("INSERT INTO messages (sender_id, receiver_id, content, created_at) VALUES (:sender_id, :receiver_id, :content, NOW())");
-                $stmt->execute([
-                    'sender_id' => (int)$from->userId,
-                    'receiver_id' => $toUserId,
-                    'content' => $content,
-                ]);
-                if (isset($this->userConnections[$toUserId])) {
-                    $receiverConn = $this->userConnections[$toUserId];
-                    $receiverConn->send(json_encode([
-                        'type' => 'private_message',
-                        'sender_id' => (int)$from->userId,
-                        'content' => $content,
-                        'avatar_url' => $avatarUrl,
-                        'timestamp' => date('c'),
-                    ]));
-                    $this->logger->info("Private message sent from user {$from->userId} to user {$toUserId}: {$content}");
-                } else {
-                    $this->logger->warning("Attempted to send private message to non-connected user ID {$toUserId}");
-                    $from->send(json_encode(['type' => 'error', 'message' => 'Recipient not connected']));
-                }
-            } else {
-                $stmt = $pdo->prepare("INSERT INTO messages (sender_id, content, created_at) VALUES (:sender_id, :content, NOW())");
-                $stmt->execute([
+
+            $stmt = $pdo->prepare("INSERT INTO messages (sender_id, content, created_at) VALUES (:sender_id, :content, NOW())");
+            $stmt->execute([
+                'sender_id' => (int)$from->userId,
+                'content' => $content,
+            ]);
+
+            foreach ($this->clients as $client) {
+                $client->send(json_encode([
+                    'type' => 'message',
                     'sender_id' => (int)$from->userId,
                     'content' => $content,
-                ]);
-                foreach ($this->clients as $client) {
-                    $client->send(json_encode([
-                        'type' => 'public_message',
-                        'sender_id' => (int)$from->userId,
-                        'content' => $content,
-                        'avatar_url' => $avatarUrl,
-                        'timestamp' => date('c'),
-                    ]));
-                }
-                $this->logger->info("Broadcast message from user {$from->userId}: {$content}");
+                    'avatar_url' => $avatarUrl,
+                    'timestamp' => date('c'),
+                ]));
             }
+            $this->logger->info("Message sent from user {$from->userId}: {$content}");
         } catch (PDOException $e) {
+            $this->logger->error("Database error while sending message: {$e->getMessage()}");
             $from->send(json_encode(['type' => 'error', 'message' => 'Failed to send message']));
-            $this->logger->error("Failed to send message from user {$from->userId}: {$e->getMessage()}");
         }
     }
 }
