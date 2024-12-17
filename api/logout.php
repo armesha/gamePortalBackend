@@ -1,15 +1,49 @@
 <?php
+session_start();
 
-require_once '../helpers/response.php';
-require_once '../helpers/auth.php';
+$timeoutDuration = 1200;
 
-// Only allow POST requests
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    sendResponse(['error' => 'Invalid request method'], 405);
+if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY']) > $timeoutDuration) {
+    $_SESSION = [];
+    if (ini_get("session.use_cookies")) {
+        $params = session_get_cookie_params();
+        setcookie(
+            session_name(),
+            '',
+            time() - 42000,
+            $params["path"],
+            $params["domain"],
+            $params["secure"],
+            $params["httponly"]
+        );
+    }
+    session_destroy();
+    echo json_encode(['message' => 'Session expired, logged out.']);
+    exit();
 }
 
-// Destroy the session
-logout();
+$_SESSION['LAST_ACTIVITY'] = time();
 
-sendResponse(['message' => 'Logged out successfully'], 200);
-?>
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    http_response_code(405);
+    echo json_encode(['error' => 'Invalid request method']);
+    exit();
+}
+
+$_SESSION = [];
+if (ini_get("session.use_cookies")) {
+    $params = session_get_cookie_params();
+    setcookie(
+        session_name(),
+        '',
+        time() - 42000,
+        $params["path"],
+        $params["domain"],
+        $params["secure"],
+        $params["httponly"]
+    );
+}
+session_destroy();
+
+http_response_code(200);
+echo json_encode(['message' => 'Logged out successfully']);
