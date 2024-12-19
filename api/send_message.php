@@ -14,16 +14,16 @@ if (empty($input['content'])) {
 }
 
 $content = trim($input['content']);
+$userId = (int)$_SESSION['user_id'];
 
 // Sanitize content
 $content = htmlspecialchars($content, ENT_QUOTES, 'UTF-8');
 
 // Insert public message into database
 $stmt = $pdo->prepare("INSERT INTO messages (sender_id, content, created_at) VALUES (:sender_id, :content, NOW())");
-$stmt->execute([
-    'sender_id' => $_SESSION['user_id'],
-    'content' => $content,
-]);
+$stmt->bindValue(':sender_id', $userId, PDO::PARAM_INT);
+$stmt->bindValue(':content', $content, PDO::PARAM_STR);
+$stmt->execute();
 
 sendResponse(['message' => 'Message sent successfully'], 200);
 ?>

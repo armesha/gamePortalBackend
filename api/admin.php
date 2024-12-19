@@ -15,8 +15,10 @@ requireLogin();
 
 // Zkontrolovat, zda je uživatel admin
 try {
+    $userId = (int)$_SESSION['user_id'];
     $stmt = $pdo->prepare("SELECT user_role FROM users WHERE user_id = :user_id");
-    $stmt->execute(['user_id' => $_SESSION['user_id']]);
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->execute();
     $currentUser = $stmt->fetch();
 
     if (!$currentUser) {
@@ -27,7 +29,8 @@ try {
         sendResponse(['error' => 'Přístup odepřen'], 403);
     }
 } catch (PDOException $e) {
-    sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
+    error_log("Admin Auth Error: " . $e->getMessage());
+    sendResponse(['error' => 'Chyba databáze'], 500);
 }
 
 // Zpracování admin akcí: úprava profilů, blokování uživatelů, mazání zpráv/komentářů
@@ -39,35 +42,71 @@ if (empty($input['action'])) {
 
 switch ($input['action']) {
     case 'block_user':
-        if (empty($input['user_id'])) {
+        if (empty($input['user_id']) || !is_numeric($input['user_id'])) {
             sendResponse(['error' => 'ID uživatele je povinné'], 400);
         }
 
+        $targetUserId = (int)$input['user_id'];
+        
         // Zabránit blokování jiných adminů nebo sebe sama
         $stmt = $pdo->prepare("SELECT user_role FROM users WHERE user_id = :user_id");
-        $stmt->execute(['user_id' => $input['user_id']]);
+        $stmt->bindValue(':user_id', $targetUserId, PDO::PARAM_INT);
+        $stmt->execute();
         $targetUser = $stmt->fetch();
 
-        if ($targetUser['user_role'] === 'admin') {
-            sendResponse(['error' => 'Nelze blokovat administrátory'], 403);
+        if (!$targetUser) {
+            sendResponse(['error' => 'Uživatel nenalezen'], 404);
         }
 
-        if ($input['user_id'] == $_SESSION['user_id']) {
+        if ($targetUser['user_role'] === 'admin') {
+            sendResponse(['error' => 'Nelze blokovat administrátora'], 403);
+        }
+
+        if ($targetUserId === $userId) {
             sendResponse(['error' => 'Nelze blokovat sám sebe'], 403);
         }
 
-        // Blokovat nebo odblokovat uživatele
-        try {
-            $stmt = $pdo->prepare("UPDATE users SET is_blocked = :is_blocked WHERE user_id = :user_id");
-            $stmt->execute([
-                'is_blocked' => isset($input['is_blocked']) && $input['is_blocked'] ? 1 : 0,
-                'user_id' => $input['user_id'],
-            ]);
+        // Aktualizovat stav blokování
+        $stmt = $pdo->prepare("UPDATE users SET is_blocked = NOT is_blocked WHERE user_id = :user_id");
+        $stmt->bindValue(':user_id', $targetUserId, PDO::PARAM_INT);
+        $stmt->execute();
 
-            sendResponse(['message' => 'Stav blokování uživatele byl aktualizován'], 200);
-        } catch (PDOException $e) {
-            sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
+        sendResponse(['message' => 'Stav blokování byl úspěšně změněn'], 200);
+        break;
+
+    case 'edit_profile':
+        if (empty($input['user_id']) || !is_numeric($input['user_id']) || empty($input['data'])) {
+            sendResponse(['error' => 'ID uživatele a data jsou povinná'], 400);
         }
+
+        $targetUserId = (int)$input['user_id'];
+        $data = $input['data'];
+
+        // Validace a sanitizace dat
+        $allowedFields = ['first_name', 'last_name', 'email', 'user_nickname'];
+        $updates = [];
+        $params = [':user_id' => $targetUserId];
+
+        foreach ($data as $field => $value) {
+            if (in_array($field, $allowedFields)) {
+                $updates[] = "$field = :$field";
+                $params[":$field"] = htmlspecialchars(trim($value), ENT_QUOTES, 'UTF-8');
+            }
+        }
+
+        if (empty($updates)) {
+            sendResponse(['error' => 'Žádná platná pole k aktualizaci'], 400);
+        }
+
+        $query = "UPDATE users SET " . implode(", ", $updates) . " WHERE user_id = :user_id";
+        $stmt = $pdo->prepare($query);
+        
+        foreach ($params as $key => &$value) {
+            $stmt->bindValue($key, $value, PDO::PARAM_STR);
+        }
+        
+        $stmt->execute();
+        sendResponse(['message' => 'Profil byl úspěšně aktualizován'], 200);
         break;
 
     case 'delete_message':
@@ -77,7 +116,8 @@ switch ($input['action']) {
         // Smazat zprávu z chatu
         try {
             $stmt = $pdo->prepare("DELETE FROM messages WHERE message_id = :message_id");
-            $stmt->execute(['message_id' => $input['message_id']]);
+            $stmt->bindValue(':message_id', $input['message_id'], PDO::PARAM_INT);
+            $stmt->execute();
             sendResponse(['message' => 'Zpráva byla smazána'], 200);
         } catch (PDOException $e) {
             sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
@@ -91,78 +131,11 @@ switch ($input['action']) {
         // Smazat komentář
         try {
             $stmt = $pdo->prepare("DELETE FROM feedbacks WHERE feedback_id = :comment_id");
-            $stmt->execute(['comment_id' => $input['comment_id']]);
+            $stmt->bindValue(':comment_id', $input['comment_id'], PDO::PARAM_INT);
+            $stmt->execute();
             sendResponse(['message' => 'Komentář byl smazán'], 200);
         } catch (PDOException $e) {
             sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
-        }
-        break;
-
-    case 'edit_profile':
-        if (empty($input['user_id']) || empty($input['data'])) {
-            sendResponse(['error' => 'ID uživatele a data jsou povinná'], 400);
-        }
-        // Aktualizovat profil uživatele
-        try {
-            $updates = [];
-            $params = ['user_id' => $input['user_id']];
-            $newEmail = null;
-            $newUsername = null;
-
-            foreach ($input['data'] as $key => $value) {
-                // Omezit aktualizovatelná pole pro bezpečnost
-                $allowedFields = ['first_name', 'last_name', 'user_nickname', 'email', 'phone_number'];
-                if (in_array($key, $allowedFields)) {
-                    $updates[] = "$key = :$key";
-                    $params[$key] = htmlspecialchars(trim($value));
-                    if ($key === 'email') {
-                        $newEmail = trim($value);
-                    }
-                    if ($key === 'user_nickname') {
-                        $newUsername = trim($value);
-                    }
-                }
-            }
-            if (empty($updates)) {
-                sendResponse(['error' => 'Žádná platná data k aktualizaci'], 400);
-            }
-
-            // Zkontrolovat, zda nový email již neexistuje u jiného uživatele
-            if ($newEmail) {
-                $stmt = $pdo->prepare("SELECT user_id FROM users WHERE email = :email AND user_id != :user_id");
-                $stmt->execute(['email' => $newEmail, 'user_id' => $input['user_id']]);
-                if ($stmt->fetch()) {
-                    sendResponse(['error' => 'Email již existuje'], 409);
-                }
-            }
-
-            // Zkontrolovat, zda nové uživatelské jméno již neexistuje u jiného uživatele
-            if ($newUsername) {
-                $stmt = $pdo->prepare("SELECT user_id FROM users WHERE user_nickname = :username AND user_id != :user_id");
-                $stmt->execute(['username' => $newUsername, 'user_id' => $input['user_id']]);
-                if ($stmt->fetch()) {
-                    sendResponse(['error' => 'Uživatelské jméno již existuje'], 409);
-                }
-            }
-
-            $sql = 'UPDATE users SET ' . implode(', ', $updates) . ' WHERE user_id = :user_id';
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute($params);
-            sendResponse(['message' => 'Profil uživatele byl aktualizován'], 200);
-        } catch (PDOException $e) {
-            // Zpracovat chybu duplicitního emailu nebo uživatelského jména
-            if ($e->getCode() == 23000) { // Porušení integrity
-                // Určit, které pole způsobilo duplicitu
-                if (strpos($e->getMessage(), 'users.email') !== false) {
-                    sendResponse(['error' => 'Email již existuje'], 409);
-                } elseif (strpos($e->getMessage(), 'users.user_nickname') !== false) {
-                    sendResponse(['error' => 'Uživatelské jméno již existuje'], 409);
-                } else {
-                    sendResponse(['error' => 'Byla zjištěna duplicita'], 409);
-                }
-            } else {
-                sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
-            }
         }
         break;
 
@@ -173,7 +146,8 @@ switch ($input['action']) {
         // Přiřadit roli admina
         try {
             $stmt = $pdo->prepare("UPDATE users SET user_role = 'admin' WHERE user_id = :user_id");
-            $stmt->execute(['user_id' => $input['user_id']]);
+            $stmt->bindValue(':user_id', $input['user_id'], PDO::PARAM_INT);
+            $stmt->execute();
             sendResponse(['message' => 'Uživatel byl povýšen na admina'], 200);
         } catch (PDOException $e) {
             sendResponse(['error' => 'Chyba databáze: ' . $e->getMessage()], 500);
@@ -193,10 +167,9 @@ switch ($input['action']) {
         try {
             $newRole = isset($input['set_admin']) && $input['set_admin'] ? 'admin' : 'user';
             $stmt = $pdo->prepare("UPDATE users SET user_role = :role WHERE user_id = :user_id");
-            $stmt->execute([
-                'role' => $newRole,
-                'user_id' => $input['user_id']
-            ]);
+            $stmt->bindValue(':role', $newRole, PDO::PARAM_STR);
+            $stmt->bindValue(':user_id', $input['user_id'], PDO::PARAM_INT);
+            $stmt->execute();
 
             sendResponse(['message' => 'Admin status uživatele byl úspěšně aktualizován'], 200);
         } catch (PDOException $e) {

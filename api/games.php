@@ -16,7 +16,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'GET') {
 // Retrieve query parameters with defaults
 $type = isset($_GET['type']) ? trim($_GET['type']) : 'all';
 $count = isset($_GET['count']) && is_numeric($_GET['count']) ? (int)$_GET['count'] : 10;
-$offset = isset($_GET['offset']) && is_numeric($_GET['offset']) ? (int)$offset = (int)$_GET['offset'] : 0;
+$offset = isset($_GET['offset']) && is_numeric($_GET['offset']) ? (int)$offset : 0;
 $favorite = isset($_GET['favorite']) ? filter_var($_GET['favorite'], FILTER_VALIDATE_BOOLEAN) : false;
 $search = isset($_GET['search']) ? trim($_GET['search']) : null;
 
@@ -45,75 +45,49 @@ try {
             g.developer, 
             g.steam_link
         FROM games g
+        WHERE 1=1
     ";
 
     $params = [];
-    $conditions = [];
 
-    // Apply filters based on 'type'
+    if ($search) {
+        $query .= " AND g.game_name LIKE :search";
+        $params['search'] = "%$search%";
+    }
+
+    if ($favorite && isLoggedIn()) {
+        $query .= " AND g.game_id IN (SELECT game_id FROM liked_games WHERE user_id = :user_id)";
+        $params['user_id'] = $_SESSION['user_id'];
+    }
+
+    // Add ordering based on type
     switch ($type) {
         case 'popular':
-            $conditions[] = "g.count_reviews > 100000";
-            $orderBy = "g.count_reviews DESC";
+            $query .= " ORDER BY g.rating DESC, g.count_reviews DESC";
             break;
         case 'new':
-            $conditions[] = "g.release_date IS NOT NULL";
-            $orderBy = "g.release_date DESC";
+            $query .= " ORDER BY g.release_date DESC";
             break;
         case 'old':
-            $conditions[] = "g.release_date IS NOT NULL";
-            $orderBy = "g.release_date ASC";
+            $query .= " ORDER BY g.release_date ASC";
             break;
         case 'random_popular':
-            $conditions[] = "g.count_reviews >= 100000";
-            $orderBy = "RAND()";
+            $query .= " ORDER BY RAND() LIMIT 1";
             break;
-        case 'all':
         default:
-            $orderBy = "g.game_id ASC";
-            break;
+            $query .= " ORDER BY g.game_id DESC";
     }
 
-    // Filter by search term if provided
-    if ($search) {
-        $conditions[] = "MATCH(g.game_name) AGAINST(:search IN BOOLEAN MODE)";
-        $orderBy = "g.count_reviews DESC";
-        $params[':search'] = $search . '*'; // Добавляем '*' для поиска по префиксу
+    if ($type !== 'random_popular') {
+        $query .= " LIMIT :offset, :count";
+        $params['offset'] = $offset;
+        $params['count'] = $count;
     }
-
-    // Filter by favorite games if requested
-    if ($favorite) {
-        if (!isLoggedIn()) {
-            sendResponse(['error' => 'Unauthorized'], 401);
-        }
-        $userId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : $_SESSION['user_id'];
-        $conditions[] = "g.game_id IN (
-                            SELECT game_id FROM favorite_games WHERE user_id = :user_id
-                        )";
-        $params[':user_id'] = $userId;
-    }
-
-    // Append conditions to the query
-    if (!empty($conditions)) {
-        $query .= " WHERE " . implode(" AND ", $conditions);
-    }
-
-    // Append ordering
-    $query .= " ORDER BY " . $orderBy;
-
-    // Append pagination
-    $query .= " LIMIT :limit OFFSET :offset";
 
     $stmt = $pdo->prepare($query);
-
-    // Bind parameters
-    foreach ($params as $key => &$val) {
-        $stmt->bindParam($key, $val);
+    foreach ($params as $key => $value) {
+        $stmt->bindValue($key, $value, is_int($value) ? PDO::PARAM_INT : PDO::PARAM_STR);
     }
-
-    $stmt->bindParam(':limit', $count, PDO::PARAM_INT);
-    $stmt->bindParam(':offset', $offset, PDO::PARAM_INT);
-
     $stmt->execute();
     $games = $stmt->fetchAll(PDO::FETCH_ASSOC);
 

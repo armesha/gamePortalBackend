@@ -15,22 +15,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $isAdmin = false;
 
         $stmt = $pdo->prepare("SELECT user_role FROM users WHERE user_id = :user_id");
-        $stmt->execute(['user_id' => $currentUserId]);
+        $stmt->bindValue(':user_id', $currentUserId, PDO::PARAM_INT);
+        $stmt->execute();
         $currentUser = $stmt->fetch();
 
         if ($currentUser && $currentUser['user_role'] === 'admin') {
             $isAdmin = true;
         }
 
-        $requestedUserId = isset($_GET['user_id']) ? $_GET['user_id'] : $currentUserId;
-        $fields = "user_id, user_nickname, avatar_filename, user_role, is_blocked";
+        $requestedUserId = isset($_GET['user_id']) ? (int)$_GET['user_id'] : $currentUserId;
 
+        $baseFields = ["user_id", "user_nickname", "avatar_filename", "user_role", "is_blocked"];
+        $sensitiveFields = ["first_name", "last_name", "email", "created_at"];
+        
+        $fields = $baseFields;
         if ($isAdmin || $requestedUserId == $currentUserId) {
-            $fields .= ", first_name, last_name, email, created_at";
+            $fields = array_merge($fields, $sensitiveFields);
         }
-
-        $stmt = $pdo->prepare("SELECT $fields FROM users WHERE user_id = :requested_user_id");
-        $stmt->execute(['requested_user_id' => $requestedUserId]);
+        
+        $fieldsStr = implode(", ", $fields);
+        
+        $stmt = $pdo->prepare("SELECT $fieldsStr FROM users WHERE user_id = :requested_user_id");
+        $stmt->bindValue(':requested_user_id', $requestedUserId, PDO::PARAM_INT);
+        $stmt->execute();
         $user = $stmt->fetch();
 
         if ($user) {

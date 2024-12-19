@@ -19,18 +19,21 @@ if (empty($input['game_id']) || !is_numeric($input['game_id'])) {
 }
 
 $gameId = (int)$input['game_id'];
-$userId = $_SESSION['user_id'];
+$userId = (int)$_SESSION['user_id'];
 
 // Check if game exists
 $stmt = $pdo->prepare("SELECT game_id FROM games WHERE game_id = :game_id");
-$stmt->execute(['game_id' => $gameId]);
+$stmt->bindValue(':game_id', $gameId, PDO::PARAM_INT);
+$stmt->execute();
 if (!$stmt->fetch()) {
     sendResponse(['error' => 'Game not found'], 404);
 }
 
 // Check if already liked
-$stmt = $pdo->prepare("SELECT * FROM favorite_games WHERE user_id = :user_id AND game_id = :game_id");
-$stmt->execute(['user_id' => $userId, 'game_id' => $gameId]);
+$stmt = $pdo->prepare("SELECT 1 FROM favorite_games WHERE user_id = :user_id AND game_id = :game_id");
+$stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+$stmt->bindValue(':game_id', $gameId, PDO::PARAM_INT);
+$stmt->execute();
 if ($stmt->fetch()) {
     sendResponse(['error' => 'Game already in favorites'], 409);
 }
@@ -38,9 +41,12 @@ if ($stmt->fetch()) {
 // Add to favorites
 $stmt = $pdo->prepare("INSERT INTO favorite_games (user_id, game_id) VALUES (:user_id, :game_id)");
 try {
-    $stmt->execute(['user_id' => $userId, 'game_id' => $gameId]);
+    $stmt->bindValue(':user_id', $userId, PDO::PARAM_INT);
+    $stmt->bindValue(':game_id', $gameId, PDO::PARAM_INT);
+    $stmt->execute();
     sendResponse(['message' => 'Game added to favorites'], 201);
 } catch (PDOException $e) {
-    sendResponse(['error' => 'Failed to like game: ' . $e->getMessage()], 500);
+    error_log("Like Game Error: " . $e->getMessage());
+    sendResponse(['error' => 'Failed to like game'], 500);
 }
 ?>
